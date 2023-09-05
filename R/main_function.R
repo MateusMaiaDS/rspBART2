@@ -101,12 +101,16 @@ rspBART <- function(x_train,
 
   B_train_arr <- array(data = NA,
                        dim = c(nrow(x_train_scale),
-                               nrow(knots)+3, # +3 here because is a natural spline
+                               # nrow(knots)+3, # +3 here because is a natural spline
+                               ncol(x_train_scale), # MOTR-BART setting
+
                                ncol(x_train_scale[,dummy_x$continuousVars, drop = FALSE])))
 
   B_test_arr <- array(data = NA,
                       dim = c(nrow(x_test_scale),
-                              nrow(knots)+3,  # +3 here because is a natural spline
+                              # nrow(knots)+3,  # +3 here because is a natural spline
+                              ncol(x_train_scale), # MOTR-BART setting
+
                               ncol(x_test_scale[,dummy_x$continuousVars, drop = FALSE])))
 
   # Setting new parameters for the spline
@@ -119,23 +123,28 @@ rspBART <- function(x_train,
 
   # Creating the natural B-spline for each predictor
   for(i in 1:length(dummy_x$continuousVars)){
-    B_train_obj <- splines::spline.des(x = x_train_scale[,dummy_x$continuousVars[i], drop = FALSE],
-                                       knots = new_knots[,dummy_x$continuousVars[i]],
-                                       ord = 4,
-                                       derivs = 0*x_train_scale[,dummy_x$continuousVars[i], drop = FALSE],outer.ok = FALSE)$design
+    # B_train_obj <- splines::spline.des(x = x_train_scale[,dummy_x$continuousVars[i], drop = FALSE],
+    #                                    knots = new_knots[,dummy_x$continuousVars[i]],
+    #                                    ord = 4,
+    #                                    derivs = 0*x_train_scale[,dummy_x$continuousVars[i], drop = FALSE],outer.ok = FALSE)$design
+    # Returning to MOTR-BART
+    B_train_obj <- x_train_scale
+    B_train_arr[,,i] <- x_train_scale
+    # B_train_arr[,,i] <- as.matrix(B_train_obj)
 
-    B_train_arr[,,i] <- as.matrix(B_train_obj)
-    B_test_arr[,,i] <- splines::spline.des(x = x_test_scale[,dummy_x$continuousVars[i], drop = FALSE],
-                                           knots = new_knots[,dummy_x$continuousVars[i]],
-                                           ord = 4,
-                                           derivs = 0*x_test_scale[,dummy_x$continuousVars[i], drop = FALSE],outer.ok = TRUE)$design
+
+    # B_test_arr[,,i] <- splines::spline.des(x = x_test_scale[,dummy_x$continuousVars[i], drop = FALSE],
+    #                                        knots = new_knots[,dummy_x$continuousVars[i]],
+    #                                        ord = 4,
+    #                                        derivs = 0*x_test_scale[,dummy_x$continuousVars[i], drop = FALSE],outer.ok = TRUE)$design
+    B_test_arr[,,i] <- x_test_scale
   }
 
   # R-th difference order matrix
   if(dif_order!=0){
     D <- D_gen(p = ncol(B_train_arr[,,1]),n_dif = dif_order)
   } else {
-    D <- diag(nrow = ncol(B_train_arr[,,1]))
+    D <- diag(nrow = ncol(B_train_arr[,,1, drop = FALSE]))
   }
 
 
@@ -209,11 +218,14 @@ rspBART <- function(x_train,
   n_post <- (n_mcmc-n_burn)
   all_trees <- vector("list", n_mcmc)
   all_betas <- vector("list",n_mcmc)
-  tau_beta_vec <- rep(n_tree*100,ncol(x_train_scale))
+  tau_beta_vec <- rep(n_tree,ncol(x_train_scale))
   all_tau_beta <- matrix(NA,nrow = n_mcmc,ncol = ncol(x_train_scale))
+  all_tau_gamma <- numeric(n_mcmc)
+
   all_delta <- matrix(NA,nrow = n_mcmc,ncol = ncol(x_train_scale))
 
   all_tau <- numeric(n_mcmc)
+
   all_y_hat <- matrix(NA,nrow = n_mcmc,ncol = nrow(x_train_scale))
   all_trees_fit <- vector("list",n_mcmc)
   all_trees <- vector("list",n_mcmc)
@@ -372,29 +384,31 @@ rspBART <- function(x_train,
     y_hat <- colSums(trees_fit)
 
     # Seeing the results for the unidimensional cases.
-    plot(x_train_scale,y_scale)
-    for(plot_i in 1:n_tree){
-      points(x_train_scale,trees_fit[plot_i,],pch=20,col = ggplot2::alpha(plot_i,0.2))
-    }
-    points(x_train_scale,y_hat,col = "blue",pch=20)
+    # plot(x_train_scale,y_scale)
+    # for(plot_i in 1:n_tree){
+    #   points(x_train_scale,trees_fit[plot_i,],pch=20,col = ggplot2::alpha(plot_i,0.2))
+    # }
+    # points(x_train_scale,y_hat,col = "blue",pch=20)
 
 
 
     # Updating all other parameters
     data$tau_beta_vec <- update_tau_betas(forest = forest,data = data)
+    # data$tau_gamma <- update_tau_gamma(forest = forest,data = data)
 
     # Updating delta
-    data$delta_vec <- update_delta(data = data)
+    # data$delta_vec <- update_delta(data = data)
+
 
     # Getting tau
     data$tau <- update_tau(y_train_hat = y_hat,
                            data = data)
 
 
-
     # Storing all predictions
     all_trees[[i]] <- forest
     all_tau[[i]] <- data$tau
+    all_tau_gamma[[i]] <- data$tau_gamma
     all_trees_fit[[i]] <- partial_train_fits
     all_y_hat[i,] <- y_hat
     all_tau_beta[i,] <- data$tau_beta_vec
@@ -426,9 +440,10 @@ rspBART <- function(x_train,
 
   plot(x_train_scale[,1],colMeans(y1_hat))
   plot(all_tau_beta, type = "l")
+  plot(all_tau_gamma,type = "l")
   plot(all_delta, type = "l")
   plot(x_train_scale,y_scale)
-  points(x_train_scale,colMeans(all_y_hat[501:2000,]),pch= 20, col = "blue")
+  points(x_train_scale,colMeans(all_y_hat[1001:2000,]),pch= 20, col = "blue")
   # ============================================
 
   curr <- 0

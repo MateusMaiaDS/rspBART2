@@ -88,6 +88,40 @@ nodeLogLike <- function(curr_part_res,
 
 }
 
+
+# A function to calculate the loglikelihood
+new_nodeLogLike <- function(curr_part_res,
+                        index_node,
+                        data){
+
+  # Subsetting the residuals
+  curr_part_res <- curr_part_res[index_node]
+
+  # Getting the number of observationsin the terminal node
+  n_leaf <- length(index_node)
+  d_basis <- 1
+  ones <- matrix(1,nrow = n_leaf)
+  D <- matrix(data$B_train_arr[index_node,,1],ncol = 1)
+  s_gamma <- n_leaf + (data$tau_gamma/data$tau)
+
+  s_beta_aux_d <- crossprod(crossprod(ones,D))/s_gamma
+  res_m <- matrix(curr_part_res,ncol = 1)
+  s_beta <- crossprod(D)+diag(x = data$tau_beta_vec[1]/data$tau, nrow = d_basis) - s_beta_aux_d
+  Gamma_beta <- crossprod(D,res_m)-(s_gamma^(-1))*sum(curr_part_res)*colSums(D)
+
+  # for(i in 1:dim(B_train_arr)[3]){
+  #   basis_subset <- data$B_train_arr[index_node,,i]
+  #   basis_aux <- basis_aux + (1/data$tau_beta_vec[i])*basis_subset%*%solve(data$P)%*%t(basis_subset)
+  # }
+
+
+  # Getting the result
+  result <- 0.5*(n_leaf-1+d_basis)*log(data$tau) -0.5*log(s_gamma)+0.5*determinant(chol2inv(chol(s_beta)),logarithm = TRUE)$modulus -0.5*data$tau*crossprod(res_m,(diag(x = (1-(n_leaf/s_gamma)),nrow = n_leaf)%*%res_m)) + 0.5*data$tau*crossprod(Gamma_beta,solve(s_beta,Gamma_beta))
+
+  return(c(result))
+
+}
+
 # Grow a tree
 grow <- function(tree,
                  curr_part_res,
@@ -172,7 +206,7 @@ grow <- function(tree,
   }
   # Calculating loglikelihood for the grown node, the left and the right node
 
-  g_loglike <- nodeLogLike(curr_part_res = curr_part_res,
+  g_loglike <- new_nodeLogLike(curr_part_res = curr_part_res,
                            # B_train_arr = data$B_train_arr,
                            index_node = g_node$train_index,
                            # tau_beta_vec = data$tau_beta_vec,
@@ -180,14 +214,14 @@ grow <- function(tree,
                            data = data)
 
 
-  left_loglike <-  nodeLogLike(curr_part_res = curr_part_res,
+  left_loglike <-  new_nodeLogLike(curr_part_res = curr_part_res,
                                # B_train_arr = data$B_train_arr,
                                index_node = left_index,
                                # tau_beta_vec = data$tau_beta_vec,
                                # P = data$P,
                                data = data)
 
-  right_loglike <-  nodeLogLike(curr_part_res = curr_part_res,
+  right_loglike <-  new_nodeLogLike(curr_part_res = curr_part_res,
                                # B_train_arr = data$B_train_arr,
                                index_node = right_index,
                                # tau_beta_vec = data$tau_beta_vec,
@@ -287,17 +321,17 @@ prune <- function(tree,
 
   # Calculating loglikelihood for the grown node, the left and the right node
 
-  p_loglike <- nodeLogLike(curr_part_res = curr_part_res,
+  p_loglike <- new_nodeLogLike(curr_part_res = curr_part_res,
                            index_node = p_node$train_index,
                            data = data
                            )
 
 
-  p_left_loglike <-  nodeLogLike(curr_part_res = curr_part_res,
+  p_left_loglike <-  new_nodeLogLike(curr_part_res = curr_part_res,
                                index_node = children_left_index,
                                data = data)
 
-  p_right_loglike <-  nodeLogLike(curr_part_res = curr_part_res,
+  p_right_loglike <-  new_nodeLogLike(curr_part_res = curr_part_res,
                                 index_node = children_right_index,
                                 data = data)
 
@@ -412,20 +446,20 @@ change <- function(tree,
   }
   # Calculating loglikelihood for the new changed nodes and the old ones
 
-  c_loglike_left <- nodeLogLike(curr_part_res = curr_part_res,
+  c_loglike_left <- new_nodeLogLike(curr_part_res = curr_part_res,
                            index_node = tree[[c_node$left]]$train_index,
                            data = data)
 
 
-  c_loglike_right <-  nodeLogLike(curr_part_res = curr_part_res,
+  c_loglike_right <-  new_nodeLogLike(curr_part_res = curr_part_res,
                                index_node = tree[[c_node$right]]$train_index,
                                data = data)
 
-  new_c_loglike_left <-  nodeLogLike(curr_part_res = curr_part_res,
+  new_c_loglike_left <-  new_nodeLogLike(curr_part_res = curr_part_res,
                                 index_node = left_index,
                                 data = data)
 
-  new_c_loglike_right <-  nodeLogLike(curr_part_res = curr_part_res,
+  new_c_loglike_right <-  new_nodeLogLike(curr_part_res = curr_part_res,
                                      index_node = right_index,
                                      data = data)
 
@@ -483,18 +517,23 @@ updateGamma <- function(tree,
     cu_t <- tree[[t_nodes_names[i]]]
 
     # Updating the sum of the residuals
-    r_sum = curr_part_res[cu_t$train_index]
+    r_sum = sum(curr_part_res[cu_t$train_index])
 
     basis_sum <- numeric(basis_dim)
 
     for(j in 1:basis_dim){
-      basis_sum[j] <- crossprod(cu_t$betas_vec[,j,drop = FALSE],colSums(data$B_test_arr[cu_t$train_index,,j]))
+      if(ncol(data$B_train_arr)!=1){
+        basis_sum[j] <- crossprod(cu_t$betas_vec[,j,drop = FALSE],colSums(data$B_train_arr[cu_t$train_index,,j]))
+      } else {
+        basis_sum[j] <- crossprod(cu_t$betas_vec[,j,drop = FALSE],colSums(matrix(data$B_train_arr[cu_t$train_index,,j],ncol = 1)))
+
+      }
     }
 
     s_gamma_inv <- 1/(length(cu_t$train_index)+data$tau_gamma/data$tau)
 
     # Computing mean and sd from the intercep
-    gamma_mean <- s_gamma_inv*(r_sum+sum(basis_sum))
+    gamma_mean <- s_gamma_inv*(r_sum-sum(basis_sum))
     gamma_sd <- sqrt(s_gamma_inv/(data$tau))
 
     tree[[t_nodes_names[i]]]$gamma = stats::rnorm(n = 1,mean = gamma_mean,sd = gamma_sd)
@@ -544,7 +583,7 @@ updateBetas <- function(tree,
 
       # Calculating the mean to be sampled
       beta_mean <- Gamma_beta_inv%*%(crossprod(data$B_train_arr[cu_t$train_index,,j],(curr_part_res[cu_t$train_index]-(cu_t$gamma+sum_aux))))
-
+      # print(sum_aux)
       # Check this line again if there's any bug on the cholesky decomposition
       tree[[t_nodes_names[i]]]$betas_vec[,j] <- mvnfast::rmvn(n = 1,mu = beta_mean,
                                                               sigma = (1/(data$tau))*Gamma_beta_inv,isChol = FALSE)
@@ -600,13 +639,53 @@ update_tau_betas <- function(forest,
       }
 
     tau_beta_vec_aux[k] <- rgamma(n = 1,
-                                   shape = 0.5*knots_size*tau_b_shape[k] + 0.5*nu,
+                                   shape = 0.5*knots_size*tau_b_shape[k] + 0.5*1,
                                    # rate = 0.5*tau_b_rate[k] + 1/data$n_tree)
 
-                                   rate = 0.5*tau_b_rate[k] + 0.5*nu*data$delta_vec[k])
+                                   rate = 0.5*tau_b_rate[k] + 0.5*1)
   }
 
   return(tau_beta_vec_aux)
+
+}
+
+
+# =================
+# Update \tau_gammas
+# =================
+update_tau_gamma <- function(forest,
+                             data){
+
+
+  # Same default as the paper;
+  a_tau_gamma <- d_tau_gamma <- 1
+
+  tau_gamma_shape <- 0
+  tau_gamma_rate <- 0
+
+  # Iterating over all trees
+  for(i in 1:length(forest)){
+
+    # Getting terminal nodes
+    t_nodes_names <- get_terminals(forest[[i]])
+    n_t_nodes <- length(t_nodes_names)
+    tau_gamma_shape <- tau_gamma_shape + n_t_nodes
+
+    # Iterating over the terminal nodes
+    for(j in 1:length(t_nodes_names)){
+      tau_gamma_rate <- tau_gamma_rate + forest[[i]][[t_nodes_names[j]]]$gamma^2
+
+    }
+
+
+  }
+
+  tau_gamma_aux <- rgamma(n = 1,
+                                shape = 0.5*tau_gamma_shape + a_tau_gamma,
+                                rate = 0.5*tau_gamma_rate + d_tau_gamma)
+
+
+  return(tau_gamma_aux)
 
 }
 

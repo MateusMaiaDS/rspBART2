@@ -22,12 +22,12 @@ mlbench.d1 <- function(n, sd = 1) {
 }
 
 library(mlbench)
-n_ <- 101
+n_ <- 201
 # sim_train <- mlbench.friedman1.nointercation(n = n_,sd = 1)  |> as.data.frame()
 # x_test <- mlbench.friedman1.nointercation(n = n_,sd = 1) |> as.data.frame() |> dplyr::select(dplyr::starts_with("x"))
 
-sim_train <- mlbench.d1(n = n_,sd = 0.25)  |> as.data.frame()
-x_test <- mlbench.d1(n = n_,sd = 0.25) |> as.data.frame() |> dplyr::select(dplyr::starts_with("x"))
+sim_train <- mlbench.d1(n = n_,sd = 0.1)  |> as.data.frame()
+x_test <- mlbench.d1(n = n_,sd = 0.1) |> as.data.frame() |> dplyr::select(dplyr::starts_with("x"))
 
 x_train <- sim_train |> dplyr::select(dplyr::starts_with("x"))
 y_train <- sim_train$y
@@ -35,10 +35,10 @@ y_train <- sim_train$y
 # x_train <- x_train[,1:5]
 # x_test <- x_test[,1:5]
 n_tree <- 10
-node_min_size = 15
+node_min_size = 1
 n_mcmc = 2000
 n_burn = 500
-alpha = 0.5
+alpha = 0.95
 beta = 2
 df = 3
 sigquant = 0.9
@@ -48,7 +48,7 @@ scale_bool = TRUE
 stump = FALSE
 no_rotation_bool = FALSE
 numcut = 100L # Defining the grid of split rules
-usequants = FALSE
+usequants = TRUE
 source("R/other_functions.R")
 
 # Splines parameters
