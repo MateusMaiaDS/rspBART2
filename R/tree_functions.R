@@ -18,7 +18,7 @@ stump <- function(data){
     parent_node = NA,
     terminal = TRUE,
     gamma = 0,
-    betas_vec = matrix(0,nrow = ncol(data$B_train_arr),ncol = ncol(data$x_train))
+    betas_vec = rep(0,ncol(D_train))
    )
 
   # Returning the node
@@ -95,28 +95,24 @@ new_nodeLogLike <- function(curr_part_res,
                         data){
 
   # Subsetting the residuals
-  curr_part_res <- curr_part_res[index_node]
+  curr_part_res_leaf <- curr_part_res[index_node]
 
   # Getting the number of observationsin the terminal node
   n_leaf <- length(index_node)
-  d_basis <- 1
+  d_basis <- ncol(data$D_train)
   ones <- matrix(1,nrow = n_leaf)
-  D <- matrix(data$B_train_arr[index_node,,1],ncol = 1)
+  D_leaf <- data$D_train[index_node,, drop = FALSE]
   s_gamma <- n_leaf + (data$tau_gamma/data$tau)
 
-  s_beta_aux_d <- crossprod(crossprod(ones,D))/s_gamma
-  res_m <- matrix(curr_part_res,ncol = 1)
-  s_beta <- crossprod(D)+diag(x = data$tau_beta_vec[1]/data$tau, nrow = d_basis) - s_beta_aux_d
-  Gamma_beta <- crossprod(D,res_m)-(s_gamma^(-1))*sum(curr_part_res)*colSums(D)
+  s_beta_aux_d <- crossprod(crossprod(ones,D_leaf))/s_gamma
+  res_m <- matrix(curr_part_res_leaf,ncol = 1)
+  s_beta <- crossprod(D_leaf)+diag(x = data$tau_beta/data$tau, nrow = d_basis) - s_beta_aux_d
+  Gamma_beta <- crossprod(D_leaf,res_m)-(s_gamma^(-1))*sum(curr_part_res_leaf)*colSums(D_leaf)
 
-  # for(i in 1:dim(B_train_arr)[3]){
-  #   basis_subset <- data$B_train_arr[index_node,,i]
-  #   basis_aux <- basis_aux + (1/data$tau_beta_vec[i])*basis_subset%*%solve(data$P)%*%t(basis_subset)
-  # }
 
 
   # Getting the result
-  result <- 0.5*(n_leaf-1+d_basis)*log(data$tau) -0.5*log(s_gamma)+0.5*determinant(chol2inv(chol(s_beta)),logarithm = TRUE)$modulus -0.5*data$tau*crossprod(res_m,(diag(x = (1-(n_leaf/s_gamma)),nrow = n_leaf)%*%res_m)) + 0.5*data$tau*crossprod(Gamma_beta,solve(s_beta,Gamma_beta))
+  result <- 0.5*(n_leaf-1-d_basis)*log(data$tau) -0.5*log(s_gamma)+0.5*determinant(chol2inv(chol(s_beta)),logarithm = TRUE)$modulus -0.5*data$tau*crossprod(res_m,(diag(x = (1-(n_leaf/s_gamma)),nrow = n_leaf)%*%res_m)) + 0.5*data$tau*crossprod(Gamma_beta,solve(s_beta,Gamma_beta))
 
   return(c(result))
 
@@ -215,17 +211,11 @@ grow <- function(tree,
 
 
   left_loglike <-  new_nodeLogLike(curr_part_res = curr_part_res,
-                               # B_train_arr = data$B_train_arr,
                                index_node = left_index,
-                               # tau_beta_vec = data$tau_beta_vec,
-                               # P = data$P,
                                data = data)
 
   right_loglike <-  new_nodeLogLike(curr_part_res = curr_part_res,
-                               # B_train_arr = data$B_train_arr,
                                index_node = right_index,
-                               # tau_beta_vec = data$tau_beta_vec,
-                               # P = data$P,
                                data = data)
 
   # Calculating the prior
@@ -323,8 +313,7 @@ prune <- function(tree,
 
   p_loglike <- new_nodeLogLike(curr_part_res = curr_part_res,
                            index_node = p_node$train_index,
-                           data = data
-                           )
+                           data = data)
 
 
   p_left_loglike <-  new_nodeLogLike(curr_part_res = curr_part_res,
@@ -504,12 +493,7 @@ updateGamma <- function(tree,
 
   # Getting the terminals
   t_nodes_names <- get_terminals(tree)
-  basis_dim <- dim(data$B_train_arr)[3]
-  knots_dim <- ncol(data$B_train_arr)
-
-
-  # Creating each element for each basis
-  basis_sum_list <- vector("list",basis_dim)
+  D_dim <- ncol(data$D_train)
 
 
   for(i in 1:length(t_nodes_names)){
@@ -519,22 +503,13 @@ updateGamma <- function(tree,
     # Updating the sum of the residuals
     r_sum = sum(curr_part_res[cu_t$train_index])
 
-    basis_sum <- numeric(basis_dim)
-
-    for(j in 1:basis_dim){
-      if(ncol(data$B_train_arr)!=1){
-        basis_sum[j] <- crossprod(cu_t$betas_vec[,j,drop = FALSE],colSums(data$B_train_arr[cu_t$train_index,,j]))
-      } else {
-        basis_sum[j] <- crossprod(cu_t$betas_vec[,j,drop = FALSE],colSums(matrix(data$B_train_arr[cu_t$train_index,,j],ncol = 1)))
-
-      }
-    }
-
     s_gamma_inv <- 1/(length(cu_t$train_index)+data$tau_gamma/data$tau)
 
     # Computing mean and sd from the intercep
-    gamma_mean <- s_gamma_inv*(r_sum-sum(basis_sum))
-    gamma_sd <- sqrt(s_gamma_inv/(data$tau))
+    gamma_mean <- s_gamma_inv*(r_sum-crossprod(cu_t$betas_vec,matrix(colSums(data$D_train[cu_t$train_index,,drop = FALSE]),ncol = 1)))
+    #maybe I don't need to use the matrix there, and ncol=1 too
+
+    gamma_sd <- sqrt(s_gamma_inv/data$tau)
 
     tree[[t_nodes_names[i]]]$gamma = stats::rnorm(n = 1,mean = gamma_mean,sd = gamma_sd)
 
@@ -553,44 +528,26 @@ updateBetas <- function(tree,
 
   # Getting the terminals
   t_nodes_names <- get_terminals(tree)
-  basis_dim <- dim(data$B_train_arr)[3]
-  knots_dim <- ncol(data$B_train_arr)
-
-  # cat(paste0("Basis dim value: ", basis_dim ,"\n"))
-  # Creating each element for each basis
-  basis_sum_list <- vector("list",basis_dim)
+  basis_dim <- ncol(data$D_train)
 
 
   for(i in 1:length(t_nodes_names)){
 
     cu_t <- tree[[t_nodes_names[i]]]
 
-    for(j in 1:basis_dim){
+    s_beta <- crossprod(data$D_train[cu_t$train_index,])+diag(x = data$tau_beta/data$tau, nrow = basis_dim)
+    s_beta_inv <- chol2inv(chol(s_beta))
 
-      Gamma_beta_tau_chol <-  chol(crossprod(data$B_train_arr[cu_t$train_index,,j])+(data$tau_beta_vec[j]/data$tau)*data$P)
-      Gamma_beta_inv <- chol2inv(Gamma_beta_tau_chol)
+    # Calculating the mean to be sampled
+    beta_mean <- s_beta_inv%*%(crossprod(data$D_train[cu_t$train_index,],(curr_part_res[cu_t$train_index]-cu_t$gamma)))
+    # print(sum_aux)
+    # Check this line again if there's any bug on the cholesky decomposition
+    tree[[t_nodes_names[i]]]$betas_vec <- c(mvnfast::rmvn(n = 1,mu = beta_mean,
+                                                            sigma = s_beta_inv/data$tau,isChol = FALSE))
 
-      sum_aux <- matrix(0,nrow = length(cu_t$train_index),ncol = 1)
+    # #If we want to use the cholesky decomposition, doesn;t seem any faster though
+    # test1 <- mvnfast::rmvn(n = 100,mu = beta_mean,sigma = sqrt(data$tau)*Gamma_beta_tau_chol,isChol = TRUE),
 
-      # Sum j exception
-      for(k in (1:basis_dim)[-j]){
-
-          # cat(paste0("RUNNING INTO THE BASIS DIM : ", basis_dim ,"\n"))
-
-          sum_aux <- sum_aux + (data$B_train_arr[cu_t$train_index,,k]%*%cu_t$betas_vec[,k,drop = FALSE])
-      }
-
-
-      # Calculating the mean to be sampled
-      beta_mean <- Gamma_beta_inv%*%(crossprod(data$B_train_arr[cu_t$train_index,,j],(curr_part_res[cu_t$train_index]-(cu_t$gamma+sum_aux))))
-      # print(sum_aux)
-      # Check this line again if there's any bug on the cholesky decomposition
-      tree[[t_nodes_names[i]]]$betas_vec[,j] <- mvnfast::rmvn(n = 1,mu = beta_mean,
-                                                              sigma = (1/(data$tau))*Gamma_beta_inv,isChol = FALSE)
-
-      # #If we want to use the cholesky decomposition, doesn;t seem any faster though
-      # test1 <- mvnfast::rmvn(n = 100,mu = beta_mean,sigma = sqrt(data$tau)*Gamma_beta_tau_chol,isChol = TRUE),
-    }
 
   }
 
@@ -715,8 +672,8 @@ getPredictions <- function(tree,
                            data){
 
   # Creating the vector to hold the values of the prediction
-  y_hat <- matrix(NA, nrow = nrow(data$x_train), ncol = dim(data$B_train_arr)[3]+1)
-  y_hat_test <- matrix(NA,nrow(data$x_test), ncol = dim(data$B_train_arr)[3]+ 1 )
+  y_hat <- matrix(NA, nrow = nrow(data$x_train), ncol = length(data$basis_subindex)+1)
+  y_hat_test <- matrix(NA,nrow(data$x_test), ncol = length(data$basis_subindex)+ 1 )
 
   # Getting terminal nodes
   t_nodes <- get_terminals(tree = tree)
@@ -728,15 +685,15 @@ getPredictions <- function(tree,
     leaf_test_index <- tree[[t_nodes[i]]]$test_index
     leaf_intercept <- tree[[t_nodes[i]]]$gamma
 
-    for(k in 1:dim(data$B_test_arr)[3]){
+    for(k in 1:length(data$basis_subindex)){
 
-        y_hat[leaf_train_index,k] <- data$B_train_arr[leaf_train_index,,k]%*%tree[[t_nodes[i]]]$betas_vec[,k, drop = FALSE]
-        y_hat_test[leaf_test_index,k] <- data$B_test_arr[leaf_test_index,,k]%*%tree[[t_nodes[i]]]$betas_vec[,k, drop = FALSE]
+        y_hat[leaf_train_index,k] <- data$D_train[leaf_train_index,basis_subindex[[k]], drop = FALSE]%*%tree[[t_nodes[i]]]$betas_vec[basis_subindex[[k]]]
+        y_hat_test[leaf_test_index,k] <- data$D_test[leaf_test_index,basis_subindex[[k]], drop = FALSE]%*%tree[[t_nodes[i]]]$betas_vec[basis_subindex[[k]]]
 
     }
 
-    y_hat[leaf_train_index,dim(data$B_test_arr)[3]+1] <- leaf_intercept
-    y_hat_test[leaf_test_index,dim(data$B_test_arr)[3]+1] <- leaf_intercept
+    y_hat[leaf_train_index,length(data$basis_subindex)+1] <- leaf_intercept
+    y_hat_test[leaf_test_index,length(data$basis_subindex)+1] <- leaf_intercept
 
   }
 

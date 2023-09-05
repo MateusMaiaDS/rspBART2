@@ -22,7 +22,7 @@ mlbench.d1 <- function(n, sd = 1) {
 }
 
 library(mlbench)
-n_ <- 201
+n_ <- 101
 # sim_train <- mlbench.friedman1.nointercation(n = n_,sd = 1)  |> as.data.frame()
 # x_test <- mlbench.friedman1.nointercation(n = n_,sd = 1) |> as.data.frame() |> dplyr::select(dplyr::starts_with("x"))
 
@@ -49,6 +49,7 @@ stump = FALSE
 no_rotation_bool = FALSE
 numcut = 100L # Defining the grid of split rules
 usequants = TRUE
+delta <- 1
 source("R/other_functions.R")
 
 # Splines parameters
