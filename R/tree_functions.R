@@ -677,13 +677,13 @@ getPredictions <- function(tree,
 
     for(k in 1:length(data$basis_subindex)){
 
-        y_hat[leaf_train_index,k] <- data$D_train[leaf_train_index,basis_subindex[[k]], drop = FALSE]%*%tree[[t_nodes[i]]]$betas_vec[basis_subindex[[k]]]
-        y_hat_test[leaf_test_index,k] <- data$D_test[leaf_test_index,basis_subindex[[k]], drop = FALSE]%*%tree[[t_nodes[i]]]$betas_vec[basis_subindex[[k]]]
+        y_hat[leaf_train_index,k] <- y_hat[leaf_train_index,k] + data$D_train[leaf_train_index,basis_subindex[[k]], drop = FALSE]%*%tree[[t_nodes[i]]]$betas_vec[basis_subindex[[k]]]
+        y_hat_test[leaf_test_index,k] <- y_hat_test[leaf_test_index,k] + data$D_test[leaf_test_index,basis_subindex[[k]], drop = FALSE]%*%tree[[t_nodes[i]]]$betas_vec[basis_subindex[[k]]]
 
     }
 
-    y_hat[leaf_train_index,length(data$basis_subindex)+1] <- leaf_intercept
-    y_hat_test[leaf_test_index,length(data$basis_subindex)+1] <- leaf_intercept
+    y_hat[leaf_train_index,length(data$basis_subindex)+1] <-  y_hat[leaf_train_index,length(data$basis_subindex)+1] + leaf_intercept
+    y_hat_test[leaf_test_index,length(data$basis_subindex)+1] <- y_hat_test[leaf_test_index,length(data$basis_subindex)+1] + leaf_intercept
 
   }
 
