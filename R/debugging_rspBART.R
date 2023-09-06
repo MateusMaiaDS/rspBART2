@@ -21,13 +21,25 @@ mlbench.d1 <- function(n, sd = 1) {
   list(x = x, y = y)
 }
 
+mlbench.d1.break <- function(n, sd = 1) {
+  x <- matrix(runif(n,min = -pi,max = pi),ncol = 1)
+  y <- sin(2*x)
+  y[x<0] <- y[x<0] + 5
+  y[x>=0] <- y[x>=0] - 5
+
+  if (sd > 0) {
+    y <- y + rnorm(n, sd = sd)
+  }
+  list(x = x, y = y)
+}
+
 library(mlbench)
 n_ <- 101
 # sim_train <- mlbench.friedman1.nointercation(n = n_,sd = 1)  |> as.data.frame()
 # x_test <- mlbench.friedman1.nointercation(n = n_,sd = 1) |> as.data.frame() |> dplyr::select(dplyr::starts_with("x"))
 
-sim_train <- mlbench.d1(n = n_,sd = 0.1)  |> as.data.frame()
-x_test <- mlbench.d1(n = n_,sd = 0.1) |> as.data.frame() |> dplyr::select(dplyr::starts_with("x"))
+sim_train <- mlbench.d1.break(n = n_,sd = 0.5)  |> as.data.frame()
+x_test <- mlbench.d1.break(n = n_,sd = 0.5) |> as.data.frame() |> dplyr::select(dplyr::starts_with("x"))
 
 x_train <- sim_train |> dplyr::select(dplyr::starts_with("x"))
 y_train <- sim_train$y

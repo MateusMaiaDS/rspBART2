@@ -138,11 +138,11 @@ rspBART <- function(x_train,
   }
 
   # R-th difference order matrix
-  if(dif_order!=0){
-    D <- D_gen(p = ncol(D_train),n_dif = dif_order)
-  } else {
-    D <- diag(nrow = ncol(D_train))
-  }
+  # if(dif_order!=0){
+  #   D <- D_gen(p = ncol(D_train),n_dif = dif_order)
+  # } else {
+  #   D <- diag(nrow = ncol(D_train))
+  # }
 
   # Scaling the y
   min_y <- min(y_train)
@@ -166,7 +166,7 @@ rspBART <- function(x_train,
 
   # Calculating the penalty matrix
   # diag(D) <- diag(D) + dif_order*tau_gamma
-  P <- crossprod(D)
+  # P <- crossprod(D)
   # P[1,1] <- P[1,1] + tau_gamma
   # P[nrow(P),ncol(P)] <- P[nrow(P),ncol(P)] + tau_gamma
   # P <- P + diag(tau_gamma,nrow = nrow(P))
@@ -270,7 +270,7 @@ rspBART <- function(x_train,
                d_tau = d_tau,
                tau_beta = tau_beta,
                delta = delta,
-               P = P,
+               # P = P,
                node_min_size = node_min_size)
 
   #   So to simply interepret the element all_var_splits each element correspond
@@ -372,7 +372,7 @@ rspBART <- function(x_train,
 
 
     # Updating all other parameters
-    # data$tau_beta <- update_tau_betas(forest = forest,data = data)
+    data$tau_beta <- update_tau_betas(forest = forest,data = data)
     # data$tau_gamma <- update_tau_gamma(forest = forest,data = data)
 
     # Updating delta

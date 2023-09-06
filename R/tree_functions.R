@@ -562,44 +562,34 @@ updateBetas <- function(tree,
 update_tau_betas <- function(forest,
                              data){
 
-  # Getting the tau_b size
-  basis_size <- dim(data$B_test_arr)[3]
-  knots_size <- ncol(data$B_train_arr)
-  tau_beta_vec_aux <- numeric(basis_size)
-
-  # Same default as the paper;
-  nu <- 2
-  # nu <- data$n_tree
-
-  tau_b_shape <- numeric(basis_size)
-  tau_b_rate <- numeric(basis_size)
-
-  # Iterating over all basis
-  for(k in 1:basis_size){
 
 
-      # Iterating over all trees
-      for(i in 1:length(forest)){
-
-        # Getting terminal nodes
-        t_nodes_names <- get_terminals(forest[[i]])
-        n_t_nodes <- length(t_nodes_names)
-        tau_b_shape[k] <- tau_b_shape[k] + n_t_nodes
-
-        # Iterating over the terminal nodes
-        for(j in 1:length(t_nodes_names)){
-          tau_b_rate[k] <- tau_b_rate[k] + crossprod(forest[[i]][[t_nodes_names[j]]]$betas_vec[,k,drop = FALSE],(data$P%*%forest[[i]][[t_nodes_names[j]]]$betas_vec[,k,drop = FALSE]))
-
-        }
+  # Setting some default hyperparameters
+  a_tau_beta <- d_tau_beta <- 0.001
+  tau_b_shape <- 0.0
+  tau_b_rate <- 0.0
 
 
-      }
+  # Iterating over all trees
+  for(i in 1:length(forest)){
 
-    tau_beta_vec_aux[k] <- rgamma(n = 1,
-                                   shape = 0.5*knots_size*tau_b_shape[k] + 0.5*1,
-                                   # rate = 0.5*tau_b_rate[k] + 1/data$n_tree)
+    # Getting terminal nodes
+    t_nodes_names <- get_terminals(forest[[i]])
+    n_t_nodes <- length(t_nodes_names)
 
-                                   rate = 0.5*tau_b_rate[k] + 0.5*1)
+    # Iterating over the terminal nodes
+    for(j in 1:length(t_nodes_names)){
+
+      tau_b_shape <- tau_b_shape + length(forest[[i]][[t_nodes_names[j]]]$betas_vec)
+
+      tau_b_rate <- tau_b_rate + crossprod(forest[[i]][[t_nodes_names[j]]]$betas_vec)
+
+    }
+
+
+    tau_beta_vec_aux <- rgamma(n = 1,
+                                   shape = 0.5*tau_b_shape + a_tau_beta,
+                                   rate = 0.5*tau_b_rate +d_tau_beta)
   }
 
   return(tau_beta_vec_aux)
@@ -615,7 +605,7 @@ update_tau_gamma <- function(forest,
 
 
   # Same default as the paper;
-  a_tau_gamma <- d_tau_gamma <- 1
+  a_tau_gamma <- d_tau_gamma <- 0.001
 
   tau_gamma_shape <- 0
   tau_gamma_rate <- 0
